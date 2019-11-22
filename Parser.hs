@@ -28,7 +28,7 @@ constant = try number <|> try boolean
 
 symbol :: Parser Expr
 symbol = do
-    name <- identifier
+    name <- identifierOrReserved
     return $ Symbol name
 
 datum :: Parser Expr

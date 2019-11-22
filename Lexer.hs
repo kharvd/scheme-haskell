@@ -7,15 +7,16 @@ import Text.Parsec.Language (emptyDef)
 
 import qualified Text.Parsec.Token as Tok
 
+reservedNames = ["define", "quote", "lambda", "set!", "if", "#t", "#f"]
+
 lexer :: Tok.TokenParser ()
 lexer = Tok.makeTokenParser style
   where
-    names = ["define", "quote", "lambda", "set!", "if", "#t", "#f"]
     identStart = letter <|> oneOf "!$%&*/:<=>?~_^"
     identLetter = identStart <|> alphaNum <|> oneOf "+-."
     style = emptyDef {
                Tok.commentLine = ";"
-             , Tok.reservedNames = names
+             , Tok.reservedNames = reservedNames
              , Tok.identStart = identStart
              , Tok.identLetter = identLetter
              }
@@ -44,8 +45,11 @@ plusOrMinus = do
 identifier :: Parser String
 identifier = plusOrMinus <|> (Tok.identifier lexer)
 
-reserved :: String -> Parser ()
-reserved = Tok.reserved lexer
+reserved :: String -> Parser String
+reserved name = Tok.reserved lexer name >> return name
+
+identifierOrReserved :: Parser String
+identifierOrReserved = try identifier <|> (choice $ map reserved reservedNames)
 
 quotation :: Parser ()
 quotation = fmap (\x -> ()) $ char '\''

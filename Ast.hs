@@ -19,9 +19,11 @@ data Expr
     -- | And [Expr]
     | If Expr Expr (Maybe Expr)
     | Application Expr [Expr]
+    -- Quoted only
     | Symbol Name
     | Pair Expr Expr
     | Nil
+    -- Nothing
     | None
     deriving (Eq, Show)
 

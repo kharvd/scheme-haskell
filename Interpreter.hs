@@ -106,8 +106,3 @@ evalExpr (Application fun args) = do
 
 evalExpr (Quote expr) = return expr 
 
-
--- datumExpr :: Datum -> Expr
--- datumExpr (ConstDatum const) = Const const
--- datumExpr (SymbolDatum (Identifier name)) = Var name
--- datumExpr (ListDatum )
