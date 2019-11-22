@@ -8,6 +8,7 @@ import System.IO.Unsafe
 import qualified Debug.Trace
 
 import Ast
+import Predefs
 
 -- trace :: String -> a -> a
 -- trace string expr = unsafePerformIO $ do
@@ -24,7 +25,7 @@ lookupScope :: Name -> Environment -> Maybe Expr
 lookupScope name (Environment scope _) = Map.lookup name scope
 
 initEnv :: Environment
-initEnv = Environment Map.empty Nothing
+initEnv = Environment (Map.fromList predefScope) Nothing
 
 runProgram :: Program -> State Environment [Expr]
 runProgram = mapM evalForm
@@ -67,6 +68,22 @@ evalDef (FunDef name args body) = do
     define name (Lambda args body)
     return $ Var name
 
+applyLambda :: [Name] -> Body -> [Expr] -> State Environment Expr
+applyLambda argNames body args = do
+    outerEnv <- get
+    let lambdaScope = Map.fromList $ zip argNames args
+    put $ Environment lambdaScope (Just outerEnv)
+
+    result <- runBody body
+
+    Environment _ updatedOuterEnv <- get
+    put $ fromJust updatedOuterEnv
+
+    return result
+
+applyPredefFun :: NamedFunction -> [Expr] -> State Environment Expr
+applyPredefFun (NamedFunction _ fun) args = return $ fun args
+
 evalExpr :: Expr -> State Environment Expr
 
 evalExpr None = return None
@@ -90,19 +107,10 @@ evalExpr lambda@(Lambda _ _) = return lambda
 evalExpr (Application fun args) = do
     evaledFun <- evalExpr fun
     evaledArgs <- mapM evalExpr args
-
-    let (argNames, body) = case evaledFun of
-            Lambda argNames body -> (argNames, body)
-            _ -> error "Not applicable"
-        lambdaScope = Map.fromList $ zip argNames evaledArgs
-
-    outerEnv <- get
-    put $ Environment lambdaScope (Just outerEnv)
-    result <- runBody body
-    Environment _ updatedOuterEnv <- get
-
-    put $ fromJust updatedOuterEnv
-    return result
+    case evaledFun of
+        Lambda argNames body -> applyLambda argNames body evaledArgs
+        Predef fun -> applyPredefFun fun evaledArgs
+        _ -> error "Not applicable"
 
 evalExpr (Quote expr) = return expr 
 
