@@ -71,7 +71,8 @@ evalExpr :: Expr -> State Environment Expr
 
 evalExpr None = return None
 
-evalExpr const@(Const _) = return const
+evalExpr const@(BoolConst _) = return const
+evalExpr const@(IntConst _) = return const
 
 evalExpr (Var name) = do
     env <- get
@@ -103,7 +104,8 @@ evalExpr (Application fun args) = do
     put $ fromJust updatedOuterEnv
     return result
 
--- evalExpr (Quote datum) = 
+evalExpr (Quote expr) = return expr 
+
 
 -- datumExpr :: Datum -> Expr
 -- datumExpr (ConstDatum const) = Const const

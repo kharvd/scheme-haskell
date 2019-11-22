@@ -10,25 +10,19 @@ data Definition = VarDef Name Expr | FunDef Name [Name] Body deriving (Eq, Show)
 type Body = [Form]
 
 data Expr 
-    = Const Constant
+    = BoolConst Bool
+    | IntConst Integer
     | Var Name
-    | Quote Datum
+    | Quote Expr
     | Lambda [Name] Body
     | Set Name Expr
     -- | And [Expr]
     | If Expr Expr (Maybe Expr)
     | Application Expr [Expr]
-    | PairExpr (Expr, Expr)
+    | Symbol Name
+    | Pair Expr Expr
     | Nil
     | None
     deriving (Eq, Show)
-
-data Constant = BoolConst BoolVal | NumberConst Integer deriving (Eq, Show)
-data BoolVal = BoolTrue | BoolFalse deriving (Eq, Show)
-
-data Datum = ConstDatum Constant | SymbolDatum Symbol | ListDatum List deriving (Eq, Show)
-data Symbol = Identifier String deriving (Eq, Show)
-
-data List = EmptyList | Cons Datum List deriving (Eq, Show)
 
     

@@ -9,41 +9,35 @@ import qualified Text.Parsec.Token as Tok
 import Lexer
 import Ast
 
-number :: Parser Constant
+number :: Parser Expr
 number = do
     n <- integer
-    return $ (NumberConst n)
+    return $ (IntConst n)
 
-boolean :: Parser Constant
+boolean :: Parser Expr
 boolean = 
     let
-        booleanTrue = reserved "#t" >> (return BoolTrue)
-        booleanFalse = reserved "#f" >> (return BoolFalse)
+        booleanTrue = reserved "#t" >> (return True)
+        booleanFalse = reserved "#f" >> (return False)
     in do
         val <- try booleanTrue <|> try booleanFalse
         return $ BoolConst val
 
-constant :: Parser Constant
+constant :: Parser Expr
 constant = try number <|> try boolean
 
-symbol :: Parser Symbol
+symbol :: Parser Expr
 symbol = do
     name <- identifier
-    return $ Identifier name
+    return $ Symbol name
 
-datum :: Parser Datum
-datum =
-    let
-        constDatum = fmap ConstDatum constant
-        symbolDatum = fmap SymbolDatum symbol
-        listDatum = fmap ListDatum list
-    in
-        try constDatum <|> try symbolDatum <|> try listDatum
+datum :: Parser Expr
+datum = try constant <|> try symbol <|> try list
 
-_toCons :: [Datum] -> List
-_toCons xs = foldr Cons EmptyList xs
+_toCons :: [Expr] -> Expr
+_toCons xs = foldr Pair Nil xs
 
-list :: Parser List
+list :: Parser Expr
 list = do
     elements <- parens $ many datum
     return $ _toCons elements
@@ -66,7 +60,7 @@ body :: Parser Body
 body = do
     defs <- many definition
     exprs <- many expression
-    return $ (map DefForm defs) ++(map ExprForm exprs)
+    return $ (map DefForm defs) ++ (map ExprForm exprs)
 
 lambda :: Parser Expr
 lambda = parens $ do
@@ -98,16 +92,13 @@ application = parens $ do
 
 expression :: Parser Expr
 expression = 
-    let
-        constExpr = fmap Const constant
-    in
-        try constExpr
-        <|> try variable
-        <|> try quote
-        <|> try lambda
-        <|> try set
-        <|> try ifExpr
-        <|> application
+    try constant
+    <|> try variable
+    <|> try quote
+    <|> try lambda
+    <|> try set
+    <|> try ifExpr
+    <|> application
 
 functionDef :: Parser Definition
 functionDef = parens $ do
