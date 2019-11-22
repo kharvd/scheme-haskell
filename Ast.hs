@@ -16,7 +16,8 @@ data Expr
     | Quote Expr
     | Lambda [Name] Body
     | Set Name Expr
-    -- | And [Expr]
+    | And [Expr]
+    | Or [Expr]
     | If Expr Expr (Maybe Expr)
     | Application Expr [Expr]
     -- Quoted only

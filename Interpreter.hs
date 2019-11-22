@@ -106,3 +106,37 @@ evalExpr (Application fun args) = do
 
 evalExpr (Quote expr) = return expr 
 
+evalExpr (If cond ifTrue maybeIfFalse) = do
+    condEval <- evalExpr cond
+    case (condEval, maybeIfFalse) of
+        (BoolConst False, Just ifFalse) -> evalExpr ifFalse
+        (BoolConst False, Nothing) -> return None
+        _ -> evalExpr ifTrue
+
+evalExpr (And exprs) = let
+    evalAnd [] = return $ BoolConst True
+    evalAnd [x] = evalExpr x
+    evalAnd (x:xs) = do
+        xEval <- evalExpr x
+        case xEval of
+            BoolConst False -> return xEval
+            _ -> evalAnd xs
+    in
+        evalAnd exprs
+
+evalExpr (Or exprs) = let
+    evalOr [] = return $ BoolConst False
+    evalOr [x] = evalExpr x
+    evalOr (x:xs) = do
+        xEval <- evalExpr x
+        case xEval of
+            BoolConst False -> evalOr xs
+            _ -> return xEval
+    in
+        evalOr exprs
+
+evalExpr symbol@(Symbol _) = return symbol
+
+evalExpr (Pair _ _) = error "Cannot evaluate raw pair"
+
+evalExpr Nil = return Nil

@@ -84,6 +84,18 @@ ifExpr = parens $ do
     ifFalse <- optionMaybe expression
     return $ If condition ifTrue ifFalse
 
+andExpr :: Parser Expr
+andExpr = parens $ do
+    reserved "and"
+    exprs <- many expression
+    return $ And exprs
+
+orExpr :: Parser Expr
+orExpr = parens $ do
+    reserved "or"
+    exprs <- many expression
+    return $ Or exprs
+
 application :: Parser Expr
 application = parens $ do
     left <- expression
