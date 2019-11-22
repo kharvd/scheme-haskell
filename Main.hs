@@ -2,6 +2,7 @@ import System.Environment (getArgs)
 import Parser
 -- import Compiler
 import Interpreter
+import Printer
 import Control.Monad.State.Lazy
 
 -- main :: IO ()
@@ -19,5 +20,5 @@ main = do
     program <- readFile $ head args
     let parseRes = parseProgram program
     let runRes = either (const []) (\res -> evalState (runProgram res) initEnv) parseRes
-    putStrLn $ unlines $ map show runRes
+    putStrLn $ unlines $ map printExpr runRes
     
