@@ -45,7 +45,7 @@ instance (MonadException m) => MonadException (ExceptT e m) where
                     run' = RunIO (fmap ExceptT . run . runExceptT)
                     in fmap runExceptT $ f run'
 
-maybeHandleError :: Result (Expr, Environment) -> Result (Expr, Environment)
+-- maybeHandleError :: Result (Expr, Environment) -> Result (Expr, Environment)
 -- maybeHandleError result = 
 
 process :: String -> InterpreterState ()
@@ -53,8 +53,9 @@ process line =
   let res = parseForm line
   in case res of
         Left err -> liftIO $ print err
-        Right form -> mapStateT maybeHandleError $ evalForm form
-            -- liftIO $ putStrLn $ printExpr expr
+        Right form -> do
+            expr <- evalForm form
+            liftIO $ putStrLn $ printExpr expr
   
 
 main :: IO ()
