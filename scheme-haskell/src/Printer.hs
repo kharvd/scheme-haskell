@@ -8,18 +8,22 @@ import ExprUtils
 
 printForm :: Form -> String
 printForm (ExprForm expr) = printExpr expr
-
-printSpaced :: [String] -> String
-printSpaced = intercalate " "
+printForm (DefForm def) = printDef def
 
 printBody :: Body -> String
-printBody body = printSpaced $ map printForm body
+printBody body = unwords $ map printForm body
+
+printDef :: Definition -> String
+printDef (VarDef name expr) = "(define " ++ name ++ " " ++ printExpr expr ++ ")"
+printDef (FunDef name args body) = "(define (" ++ name ++ printArgs args ++ ") " ++ printBody body ++ ")"
+    where printArgs [] = ""
+          printArgs args = " " ++ unwords args
 
 printList :: [Expr] -> String
-printList body = "(" ++ (printSpaced $ map printExpr body) ++ ")"
+printList body = "(" ++ unwords (map printExpr body) ++ ")"
 
 printPair :: [Expr] -> Expr -> String
-printPair init last = "(" ++ (printSpaced $ map printExpr init) ++ " . " ++ (printExpr last) ++ ")"
+printPair init last = "(" ++ unwords (map printExpr init) ++ " . " ++ printExpr last ++ ")"
 
 printExpr :: Expr -> String
 printExpr (BoolConst True) = "#t"
@@ -27,12 +31,12 @@ printExpr (BoolConst False) = "#f"
 printExpr (IntConst n) = show n 
 printExpr (Var name) = name
 printExpr (Quote expr) = "'" ++ printExpr expr
-printExpr (Lambda args body) = "(lambda (" ++ (printSpaced args) ++ ") " ++ (printBody body) ++ ")"
+printExpr (Lambda args body) = "(lambda (" ++ unwords args ++ ") " ++ printBody body ++ ")"
 printExpr (Set name value) = printList [Var "set!", Var name, value]
 printExpr (And exprs) = printList exprs 
 printExpr (Or exprs) = printList exprs
 printExpr (If cond ifTrue maybeIfFalse) = printList ([Var "if", cond, ifTrue] ++ maybeToList maybeIfFalse)
-printExpr (Application fun body) = printList $ [fun] ++ body
+printExpr (Application fun body) = printList $ fun:body
 printExpr (Symbol name) = name
 printExpr pair@(Pair car cdr) = 
     let
@@ -49,5 +53,4 @@ printExpr pair@(Pair car cdr) =
 printExpr Nil = "()"
 printExpr None = ""
 printExpr (Predef fun) = show fun
-
 

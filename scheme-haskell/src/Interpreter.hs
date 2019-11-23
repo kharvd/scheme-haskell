@@ -1,24 +1,26 @@
 module Interpreter where
 
 import Data.Maybe
-import Control.Monad.State.Lazy
+import Data.Foldable
+import Control.Monad.State.Strict
+import Control.Monad.Trans.Except
 import qualified Data.Map.Strict as Map
+import qualified Control.Scanl as SL
 
 import System.IO.Unsafe
 import qualified Debug.Trace
 
 import Ast
 import Predefs
-
--- trace :: String -> a -> a
--- trace string expr = unsafePerformIO $ do
---     Debug.Trace.traceIO string
---     return expr
+import Utils
 
 type Scope = Map.Map Name Expr
 data Environment = Environment Scope (Maybe Environment) deriving (Show)
 
-type InterpreterState = State Environment 
+type InterpreterState = StateT Environment Result
+
+initEnv :: Environment
+initEnv = Environment (Map.fromList predefScope) Nothing
 
 mapScope :: (Scope -> Scope) -> Environment -> Environment
 mapScope f env@(Environment scope parent) = Environment (f scope) parent
@@ -26,23 +28,22 @@ mapScope f env@(Environment scope parent) = Environment (f scope) parent
 lookupScope :: Name -> Environment -> Maybe Expr
 lookupScope name (Environment scope _) = Map.lookup name scope
 
-initEnv :: Environment
-initEnv = Environment (Map.fromList predefScope) Nothing
+runProgram :: Program -> [Result Expr]
+runProgram forms = map (fmap fst) $ runProgram' forms
 
-runProgram :: Program -> InterpreterState [Expr]
-runProgram = mapM evalForm
+runProgram' :: Program -> [Result (Expr, Environment)]
+runProgram' = tail . scanlM foldForms (return (None, initEnv))
+    where
+        foldForms :: (Expr, Environment) -> Form -> Result (Expr, Environment)
+        foldForms (_, env) form = runStateT (evalForm form) env
 
 runBody :: Body -> InterpreterState Expr
 runBody = fmap last . mapM evalForm
 
-recoverWith :: Maybe a -> Maybe a -> Maybe a
-recoverWith m1@(Just x) _ = m1
-recoverWith _ m2 = m2
-
 resolve :: Name -> Environment -> Maybe Expr
 resolve name (Environment scope maybeParent) =
     recoverWith (scope Map.!? name) fallback
-    where fallback = maybeParent >>= (resolve name)
+    where fallback = maybeParent >>= resolve name
 
 define :: Name -> Expr -> InterpreterState ()
 define name value = modify $ mapScope (Map.insert name value)
@@ -50,11 +51,17 @@ define name value = modify $ mapScope (Map.insert name value)
 replace :: Name -> Expr -> InterpreterState ()
 replace name value = do
     Environment scope maybeParent <- get
-    put $ case (scope Map.!? name, maybeParent) of
-        ((Just z), maybeParent) -> Environment (Map.insert name value scope) maybeParent
-        (Nothing, (Just parent)) -> Environment scope (Just $ execState (replace name value) parent)
-        (Nothing, Nothing) -> error $ name ++ " is undefined"
-    return ()
+    case (scope Map.!? name, maybeParent) of
+        (Just z, maybeParent) -> do
+            put $ Environment (Map.insert name value scope) maybeParent
+            return ()
+        (Nothing, Just parent) -> do
+            put parent
+            replace name value
+            newParent <- get
+            put $ Environment scope (Just newParent)
+            return ()
+        (Nothing, Nothing) -> lift $ throwE $ SchemeError (name ++ " is not in scope")
 
 evalForm :: Form -> InterpreterState Expr
 evalForm (ExprForm expr) = evalExpr expr
@@ -84,7 +91,7 @@ applyLambda argNames body args = do
     return result
 
 applyPredefFun :: NamedFunction -> [Expr] -> InterpreterState Expr
-applyPredefFun (NamedFunction _ fun) args = return $ fun args
+applyPredefFun (NamedFunction _ fun) args = lift $ fun args
 
 evalExpr :: Expr -> InterpreterState Expr
 
@@ -97,14 +104,14 @@ evalExpr (Var name) = do
     env <- get
     case (resolve name env) of
         Just x -> return x
-        _ -> error $ name ++ " is undefined"
+        _ -> lift $ throwE $ SchemeError (name ++ " is undefined")
 
 evalExpr (Set name expr) = do
     evaledExpr <- evalExpr expr
     replace name evaledExpr
     return None
-                
-evalExpr lambda@(Lambda _ _) = return lambda 
+
+evalExpr lambda@(Lambda _ _) = return lambda
 
 evalExpr (Application fun args) = do
     evaledFun <- evalExpr fun
@@ -112,9 +119,9 @@ evalExpr (Application fun args) = do
     case evaledFun of
         Lambda argNames body -> applyLambda argNames body evaledArgs
         Predef fun -> applyPredefFun fun evaledArgs
-        _ -> error "Not applicable"
+        _ -> lift $ throwE $ SchemeError "Not applicable"
 
-evalExpr (Quote expr) = return expr 
+evalExpr (Quote expr) = return expr
 
 evalExpr (If cond ifTrue maybeIfFalse) = do
     condEval <- evalExpr cond
@@ -147,6 +154,6 @@ evalExpr (Or exprs) = let
 
 evalExpr symbol@(Symbol _) = return symbol
 
-evalExpr (Pair _ _) = error "Cannot evaluate raw pair"
+evalExpr (Pair _ _) = lift $ throwE $ SchemeError "Cannot evaluate raw pair"
 
 evalExpr Nil = return Nil

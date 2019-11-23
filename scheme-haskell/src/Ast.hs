@@ -1,5 +1,10 @@
 module Ast where
 
+import Control.Monad.Trans.Except
+
+newtype SchemeError = SchemeError String deriving (Show)
+type Result = ExceptT SchemeError IO
+
 type Name = String
 
 type Program = [Form] 
@@ -9,7 +14,7 @@ data Definition = VarDef Name Expr | FunDef Name [Name] Body deriving (Show)
 
 type Body = [Form]
 
-data NamedFunction = NamedFunction Name ([Expr] -> Expr)
+data NamedFunction = NamedFunction Name ([Expr] -> Result Expr)
 instance Show NamedFunction where
     show (NamedFunction name _) = "#[" ++ name ++ "]"
 

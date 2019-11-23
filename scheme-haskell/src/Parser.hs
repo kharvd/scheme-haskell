@@ -10,15 +10,13 @@ import Lexer
 import Ast
 
 number :: Parser Expr
-number = do
-    n <- integer
-    return $ (IntConst n)
+number = IntConst <$> integer
 
 boolean :: Parser Expr
-boolean = 
+boolean =
     let
-        booleanTrue = reserved "#t" >> (return True)
-        booleanFalse = reserved "#f" >> (return False)
+        booleanTrue = reserved "#t" >> return True
+        booleanFalse = reserved "#f" >> return False
     in do
         val <- try booleanTrue <|> try booleanFalse
         return $ BoolConst val
@@ -27,15 +25,13 @@ constant :: Parser Expr
 constant = try number <|> try boolean
 
 symbol :: Parser Expr
-symbol = do
-    name <- identifierOrReserved
-    return $ Symbol name
+symbol = Symbol <$> identifierOrReserved
 
 datum :: Parser Expr
 datum = try constant <|> try symbol <|> try list
 
 _toCons :: [Expr] -> Expr
-_toCons xs = foldr Pair Nil xs
+_toCons = foldr Pair Nil
 
 list :: Parser Expr
 list = do
@@ -43,38 +39,34 @@ list = do
     return $ _toCons elements
 
 variable :: Parser Expr
-variable = do
-    name <- identifier
-    return $ Var name
+variable = Var <$> identifier
 
 quote :: Parser Expr
-quote = 
+quote =
     let
         datumQuote = datum >>= (return . Quote)
         quoteParens = parens (reserved "quote" >> datumQuote)
         quoteShorthand = quotation >> datumQuote
-    in 
+    in
         try quoteParens <|> try quoteShorthand
 
 body :: Parser Body
 body = do
     defs <- many definition
     exprs <- many expression
-    return $ (map DefForm defs) ++ (map ExprForm exprs)
+    return $ map DefForm defs ++ map ExprForm exprs
 
 lambda :: Parser Expr
 lambda = parens $ do
     reserved "lambda"
     vars <- parens $ many identifier
-    b <- body
-    return $ Lambda vars b
+    Lambda vars <$> body
 
 set :: Parser Expr
 set = parens $ do
     reserved "set!"
     name <- identifier
-    body <- expression
-    return $ Set name body
+    Set name <$> expression
 
 ifExpr :: Parser Expr
 ifExpr = parens $ do
@@ -103,7 +95,7 @@ application = parens $ do
     return $ Application left right
 
 expression :: Parser Expr
-expression = 
+expression =
     try constant
     <|> try variable
     <|> try quote
@@ -133,13 +125,13 @@ definition :: Parser Definition
 definition = try functionDef <|> try variableDef
 
 form :: Parser Form
-form = 
-    let 
+form =
+    let
         definitionForm = fmap DefForm definition
         expressionForm = fmap ExprForm expression
     in
         try definitionForm <|> expressionForm
-    
+
 program :: Parser Program
 program = do
     forms <- many form
@@ -147,3 +139,6 @@ program = do
 
 parseProgram :: String -> Either ParseError Program
 parseProgram s = parse program "<stdin>" s
+
+parseForm :: String -> Either ParseError Form
+parseForm = parse form "<stdin>" 

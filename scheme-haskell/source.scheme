@@ -1,0 +1,11 @@
+(define y 1)
+y
+(define (foo x) (+ y x))
+(foo 2)
+(set! y 4)
+y
++
+(cdr '(1 2 3))
+(+ 1 2 3 4)
+z
+(cdr)
