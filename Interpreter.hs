@@ -18,6 +18,8 @@ import Predefs
 type Scope = Map.Map Name Expr
 data Environment = Environment Scope (Maybe Environment) deriving (Show)
 
+type InterpreterState = State Environment 
+
 mapScope :: (Scope -> Scope) -> Environment -> Environment
 mapScope f env@(Environment scope parent) = Environment (f scope) parent
 
@@ -27,10 +29,10 @@ lookupScope name (Environment scope _) = Map.lookup name scope
 initEnv :: Environment
 initEnv = Environment (Map.fromList predefScope) Nothing
 
-runProgram :: Program -> State Environment [Expr]
+runProgram :: Program -> InterpreterState [Expr]
 runProgram = mapM evalForm
 
-runBody :: Body -> State Environment Expr
+runBody :: Body -> InterpreterState Expr
 runBody = fmap last . mapM evalForm
 
 recoverWith :: Maybe a -> Maybe a -> Maybe a
@@ -42,10 +44,10 @@ resolve name (Environment scope maybeParent) =
     recoverWith (scope Map.!? name) fallback
     where fallback = maybeParent >>= (resolve name)
 
-define :: Name -> Expr -> State Environment ()
+define :: Name -> Expr -> InterpreterState ()
 define name value = modify $ mapScope (Map.insert name value)
 
-replace :: Name -> Expr -> State Environment ()
+replace :: Name -> Expr -> InterpreterState ()
 replace name value = do
     Environment scope maybeParent <- get
     put $ case (scope Map.!? name, maybeParent) of
@@ -54,11 +56,11 @@ replace name value = do
         (Nothing, Nothing) -> error $ name ++ " is undefined"
     return ()
 
-evalForm :: Form -> State Environment Expr
+evalForm :: Form -> InterpreterState Expr
 evalForm (ExprForm expr) = evalExpr expr
 evalForm (DefForm def) = evalDef def
 
-evalDef :: Definition -> State Environment Expr
+evalDef :: Definition -> InterpreterState Expr
 evalDef (VarDef name expr) = do
     evaledExpr <- evalExpr expr
     define name evaledExpr
@@ -68,7 +70,7 @@ evalDef (FunDef name args body) = do
     define name (Lambda args body)
     return $ Var name
 
-applyLambda :: [Name] -> Body -> [Expr] -> State Environment Expr
+applyLambda :: [Name] -> Body -> [Expr] -> InterpreterState Expr
 applyLambda argNames body args = do
     outerEnv <- get
     let lambdaScope = Map.fromList $ zip argNames args
@@ -81,10 +83,10 @@ applyLambda argNames body args = do
 
     return result
 
-applyPredefFun :: NamedFunction -> [Expr] -> State Environment Expr
+applyPredefFun :: NamedFunction -> [Expr] -> InterpreterState Expr
 applyPredefFun (NamedFunction _ fun) args = return $ fun args
 
-evalExpr :: Expr -> State Environment Expr
+evalExpr :: Expr -> InterpreterState Expr
 
 evalExpr None = return None
 
