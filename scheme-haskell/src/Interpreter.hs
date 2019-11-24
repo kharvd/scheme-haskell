@@ -63,16 +63,15 @@ applyLambda argNames body args = do
 applyPredefFun :: (Monad m) => NamedFunction -> [Expr] -> InterpreterT m Expr
 applyPredefFun (NamedFunction _ fun) args = ExceptT $ return (fun args)
 
-evalExpr :: (Monad m) => Expr -> InterpreterT m Expr
-evalExpr None = return None
-evalExpr const@(BoolConst _) = return const
-evalExpr const@(IntConst _) = return const
-evalExpr (Var name) = do
+evalVar :: (Monad m) => Name -> InterpreterT m Expr
+evalVar name = do
   env <- ST.get
   case Env.resolve name env of
     Just x -> return x
     _ -> throwE $ SchemeError (name ++ " is undefined")
-evalExpr (Set name expr) = do
+
+evalSet :: (Monad m) => Name -> Expr -> InterpreterT m Expr
+evalSet name expr = do
   evaledExpr <- evalExpr expr
   env <- ST.get
   let maybeNewEnv = Env.replace name evaledExpr env
@@ -80,22 +79,26 @@ evalExpr (Set name expr) = do
     Just newEnv -> ST.put newEnv
     Nothing -> throwE $ SchemeError (name ++ " is not in scope")
   return None
-evalExpr lambda@(Lambda _ _) = return lambda
-evalExpr (Application fun args) = do
+
+evalApplication :: (Monad m) => Expr -> [Expr] -> InterpreterT m Expr
+evalApplication fun args = do
   evaledFun <- evalExpr fun
   evaledArgs <- mapM evalExpr args
   case evaledFun of
     Lambda argNames body -> applyLambda argNames body evaledArgs
     Predef fun -> applyPredefFun fun evaledArgs
     _ -> throwE $ SchemeError "Not applicable"
-evalExpr (Quote expr) = return expr
-evalExpr (If cond ifTrue maybeIfFalse) = do
+
+evalIf :: (Monad m) => Expr -> Expr -> Maybe Expr -> InterpreterT m Expr
+evalIf cond ifTrue maybeIfFalse = do
   condEval <- evalExpr cond
   case (condEval, maybeIfFalse) of
     (BoolConst False, Just ifFalse) -> evalExpr ifFalse
     (BoolConst False, Nothing) -> return None
     _ -> evalExpr ifTrue
-evalExpr (And exprs) =
+
+evalAnd :: (Monad m) => [Expr] -> InterpreterT m Expr
+evalAnd exprs =
   let evalAnd [] = return $ BoolConst True
       evalAnd [x] = evalExpr x
       evalAnd (x:xs) = do
@@ -104,7 +107,9 @@ evalExpr (And exprs) =
           BoolConst False -> return xEval
           _ -> evalAnd xs
    in evalAnd exprs
-evalExpr (Or exprs) =
+
+evalOr :: (Monad m) => [Expr] -> InterpreterT m Expr
+evalOr exprs =
   let evalOr [] = return $ BoolConst False
       evalOr [x] = evalExpr x
       evalOr (x:xs) = do
@@ -113,6 +118,19 @@ evalExpr (Or exprs) =
           BoolConst False -> evalOr xs
           _ -> return xEval
    in evalOr exprs
+
+evalExpr :: (Monad m) => Expr -> InterpreterT m Expr
+evalExpr None = return None
+evalExpr const@(BoolConst _) = return const
+evalExpr const@(IntConst _) = return const
+evalExpr (Var name) = evalVar name
+evalExpr (Set name expr) = evalSet name expr
+evalExpr lambda@(Lambda _ _) = return lambda
+evalExpr (Application fun args) = evalApplication fun args
+evalExpr (Quote expr) = return expr
+evalExpr (If cond ifTrue maybeIfFalse) = evalIf cond ifTrue maybeIfFalse
+evalExpr (And exprs) = evalAnd exprs
+evalExpr (Or exprs) = evalOr exprs
 evalExpr symbol@(Symbol _) = return symbol
 evalExpr (Pair _ _) = throwE $ SchemeError "Cannot evaluate raw pair"
 evalExpr Nil = return Nil
