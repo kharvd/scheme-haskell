@@ -111,15 +111,13 @@ functionDef = parens $ do
         name <- identifier
         args <- many identifier
         return (name, args)
-    b <- body
-    return $ FunDef name args b
+    FunDef name args <$> body
 
 variableDef :: Parser Definition
 variableDef = parens $ do
     reserved "define"
     name <- identifier
-    value <- expression
-    return $ VarDef name value
+    VarDef name <$> expression
 
 definition :: Parser Definition
 definition = try functionDef <|> try variableDef
@@ -133,12 +131,10 @@ form =
         try definitionForm <|> expressionForm
 
 program :: Parser Program
-program = do
-    forms <- many form
-    return forms
+program = many form
 
 parseProgram :: String -> Either ParseError Program
-parseProgram s = parse program "<stdin>" s
+parseProgram = parse program "<stdin>" 
 
 parseForm :: String -> Either ParseError Form
-parseForm = parse form "<stdin>" 
+parseForm = parse form "<stdin>"
