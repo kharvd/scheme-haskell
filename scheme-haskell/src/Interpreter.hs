@@ -49,14 +49,20 @@ withEnv env computation = do
      Just x -> ST.put x
      Nothing -> error "fatal error: empty parent environment"
   return result
+ 
+checkNumArgs :: (Monad m) => Int -> Int -> InterpreterT m ()
+checkNumArgs expected actual | expected > actual = throwE $ SchemeError "too few args"
+checkNumArgs expected actual | expected < actual = throwE $ SchemeError "too many args"
+checkNumArgs expected actual = return ()
 
 applyLambda :: (Monad m) => [Name] -> Body -> [Expr] -> InterpreterT m Expr
 applyLambda argNames body args =
   do
     outerEnv <- ST.get
+    checkNumArgs (length argNames) (length args)
     let lambdaEnv = Env.create (zip argNames args) (Just outerEnv)
-    withEnv lambdaEnv (runBody body)
-
+    withEnv lambdaEnv (runBody body) 
+        
 applyPredefFun :: (Monad m) => NamedFunction -> [Expr] -> InterpreterT m Expr
 applyPredefFun (NamedFunction _ fun) args = ExceptT $ return (fun args)
 
