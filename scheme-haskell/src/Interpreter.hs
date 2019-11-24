@@ -1,58 +1,23 @@
-module Interpreter (initEnv, evalForm, InterpreterT (..)) where
+module Interpreter where
 
 import Data.Maybe
 import Control.Monad.State.Strict (StateT)
 import qualified Control.Monad.State.Strict as ST
-import Control.Monad.Trans.Except (ExceptT (..), throwE)
-import qualified Data.Map.Strict as Map
-import qualified Control.Scanl as SL
+import Control.Monad.Trans.Except (ExceptT (..), throwE, catchE)
 
-import System.IO.Unsafe
-import qualified Debug.Trace
-
-import Expression
 import Predefs
+import Expression
 import Utils
+import qualified Environment as Env
+import Environment (Environment)
 
-type Scope = Map.Map Name Expr
-data Environment = Environment Scope (Maybe Environment) deriving (Show)
+type InterpreterT m = ExceptT SchemeError (StateT (Environment Expr) m)
 
-type InterpreterT m = ExceptT SchemeError (StateT Environment m)
-
-initEnv :: Environment
-initEnv = Environment (Map.fromList predefScope) Nothing
-
-mapScope :: (Scope -> Scope) -> Environment -> Environment
-mapScope f env@(Environment scope parent) = Environment (f scope) parent
-
-lookupScope :: Name -> Environment -> Maybe Expr
-lookupScope name (Environment scope _) = Map.lookup name scope
+initEnv :: Environment Expr
+initEnv = Env.create predefScope Nothing
 
 runBody :: (Monad m) => Body -> InterpreterT m Expr
 runBody = fmap last . mapM evalForm
-
-resolve :: Name -> Environment -> Maybe Expr
-resolve name (Environment scope maybeParent) =
-    recoverWith (scope Map.!? name) fallback
-    where fallback = maybeParent >>= resolve name
-
-define :: (Monad m) => Name -> Expr -> InterpreterT m ()
-define name value = ST.modify $ mapScope (Map.insert name value)
-
-replace :: (Monad m) => Name -> Expr -> InterpreterT m ()
-replace name value = do
-    Environment scope maybeParent <- ST.get
-    case (scope Map.!? name, maybeParent) of
-        (Just z, maybeParent) -> do
-            ST.put $ Environment (Map.insert name value scope) maybeParent
-            return ()
-        (Nothing, Just parent) -> do
-            ST.put parent
-            replace name value
-            newParent <- ST.get
-            ST.put $ Environment scope (Just newParent)
-            return ()
-        (Nothing, Nothing) -> throwE $ SchemeError (name ++ " is not in scope")
 
 evalForm :: (Monad m) => Form -> InterpreterT m Expr
 evalForm (ExprForm expr) = evalExpr expr
@@ -61,27 +26,36 @@ evalForm (DefForm def) = evalDef def
 evalDef :: (Monad m) => Definition -> InterpreterT m Expr
 evalDef (VarDef name expr) = do
     evaledExpr <- evalExpr expr
-    define name evaledExpr
+    ST.modify $ Env.insert name evaledExpr
     return $ Var name
 
 evalDef (FunDef name args body) = do
-    define name (Lambda args body)
+    ST.modify $ Env.insert name (Lambda args body)
     return $ Var name
 
+withEnv :: (Monad m) => Environment Expr -> InterpreterT m Expr -> InterpreterT m Expr
+withEnv env computation = do
+  oldEnv <- ST.get
+  let 
+    handleError e = do
+      ST.put oldEnv 
+      throwE e
+      
+  ST.put env
+  result <- catchE computation handleError
+  innerEnv <- ST.get
+
+  case Env.parent innerEnv of
+     Just x -> ST.put x
+     Nothing -> error "fatal error: empty parent environment"
+  return result
+
 applyLambda :: (Monad m) => [Name] -> Body -> [Expr] -> InterpreterT m Expr
-applyLambda argNames body args = do
+applyLambda argNames body args =
+  do
     outerEnv <- ST.get
-    let lambdaScope = Map.fromList $ zip argNames args
-    ST.put $ Environment lambdaScope (Just outerEnv)
-
-    result <- runBody body
-
-    Environment _ updatedOuterEnv <- ST.get
-    case updatedOuterEnv of
-       Just x -> ST.put x
-       Nothing -> error "lambda returned empty parent environment"
-
-    return result
+    let lambdaEnv = Env.create (zip argNames args) (Just outerEnv)
+    withEnv lambdaEnv (runBody body)
 
 applyPredefFun :: (Monad m) => NamedFunction -> [Expr] -> InterpreterT m Expr
 applyPredefFun (NamedFunction _ fun) args = ExceptT $ return (fun args)
@@ -95,13 +69,18 @@ evalExpr const@(IntConst _) = return const
 
 evalExpr (Var name) = do
     env <- ST.get
-    case resolve name env of
+    case Env.resolve name env of
         Just x -> return x
         _ -> throwE $ SchemeError (name ++ " is undefined")
 
 evalExpr (Set name expr) = do
     evaledExpr <- evalExpr expr
-    replace name evaledExpr
+    env <- ST.get
+    let maybeNewEnv = Env.replace name evaledExpr env
+    case maybeNewEnv of
+      Just newEnv -> ST.put newEnv
+      Nothing -> throwE $ SchemeError (name ++ " is not in scope")
+
     return None
 
 evalExpr lambda@(Lambda _ _) = return lambda

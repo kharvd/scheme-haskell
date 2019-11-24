@@ -1,2 +1,7 @@
+import Test.Hspec
+
+import qualified InterpreterSpec
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = hspec $ do
+  describe "Interpreter" InterpreterSpec.spec

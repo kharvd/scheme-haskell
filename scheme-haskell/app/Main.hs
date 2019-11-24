@@ -2,7 +2,7 @@ import System.Environment (getArgs)
 import Control.Monad.State.Strict (runStateT)
 import Control.Monad.Trans (lift, liftIO)
 import Control.Monad (void)
-import Control.Monad.Trans.Except (runExceptT, ExceptT)
+import Control.Monad.Trans.Except (runExceptT, ExceptT (..), catchE)
 import System.Console.Haskeline
 
 import Parser
@@ -45,7 +45,7 @@ type InterpreterIO = InterpreterT IO
 instance (MonadException m) => MonadException (ExceptT e m) where
     controlIO f = ExceptT $ controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap ExceptT . run . runExceptT)
-                    in fmap runExceptT $ f run'
+                    in runExceptT <$> f run'
 
 handleError :: SchemeError -> InterpreterIO Expr
 handleError (SchemeError msg) = do
