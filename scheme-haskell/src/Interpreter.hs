@@ -17,7 +17,7 @@ import Utils
 type Scope = Map.Map Name Expr
 data Environment = Environment Scope (Maybe Environment) deriving (Show)
 
-type InterpreterState = StateT Environment Result
+type InterpreterState = ExceptT SchemeError (StateT Environment IO)
 
 initEnv :: Environment
 initEnv = Environment (Map.fromList predefScope) Nothing
@@ -27,15 +27,6 @@ mapScope f env@(Environment scope parent) = Environment (f scope) parent
 
 lookupScope :: Name -> Environment -> Maybe Expr
 lookupScope name (Environment scope _) = Map.lookup name scope
-
-runProgram :: Program -> [Result Expr]
-runProgram forms = map (fmap fst) $ runProgram' forms
-
-runProgram' :: Program -> [Result (Expr, Environment)]
-runProgram' = tail . scanlM foldForms (return (None, initEnv))
-    where
-        foldForms :: (Expr, Environment) -> Form -> Result (Expr, Environment)
-        foldForms (_, env) form = runStateT (evalForm form) env
 
 runBody :: Body -> InterpreterState Expr
 runBody = fmap last . mapM evalForm
@@ -61,7 +52,7 @@ replace name value = do
             newParent <- get
             put $ Environment scope (Just newParent)
             return ()
-        (Nothing, Nothing) -> lift $ throwE $ SchemeError (name ++ " is not in scope")
+        (Nothing, Nothing) -> throwE $ SchemeError (name ++ " is not in scope")
 
 evalForm :: Form -> InterpreterState Expr
 evalForm (ExprForm expr) = evalExpr expr
@@ -90,8 +81,9 @@ applyLambda argNames body args = do
 
     return result
 
+
 applyPredefFun :: NamedFunction -> [Expr] -> InterpreterState Expr
-applyPredefFun (NamedFunction _ fun) args = lift $ fun args
+applyPredefFun (NamedFunction _ fun) args = ExceptT $ return (fun args)
 
 evalExpr :: Expr -> InterpreterState Expr
 
@@ -104,7 +96,7 @@ evalExpr (Var name) = do
     env <- get
     case (resolve name env) of
         Just x -> return x
-        _ -> lift $ throwE $ SchemeError (name ++ " is undefined")
+        _ -> throwE $ SchemeError (name ++ " is undefined")
 
 evalExpr (Set name expr) = do
     evaledExpr <- evalExpr expr
@@ -119,7 +111,7 @@ evalExpr (Application fun args) = do
     case evaledFun of
         Lambda argNames body -> applyLambda argNames body evaledArgs
         Predef fun -> applyPredefFun fun evaledArgs
-        _ -> lift $ throwE $ SchemeError "Not applicable"
+        _ -> throwE $ SchemeError "Not applicable"
 
 evalExpr (Quote expr) = return expr
 
@@ -154,6 +146,6 @@ evalExpr (Or exprs) = let
 
 evalExpr symbol@(Symbol _) = return symbol
 
-evalExpr (Pair _ _) = lift $ throwE $ SchemeError "Cannot evaluate raw pair"
+evalExpr (Pair _ _) = throwE $ SchemeError "Cannot evaluate raw pair"
 
 evalExpr Nil = return Nil

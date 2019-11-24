@@ -45,25 +45,25 @@ instance (MonadException m) => MonadException (ExceptT e m) where
                     run' = RunIO (fmap ExceptT . run . runExceptT)
                     in fmap runExceptT $ f run'
 
--- maybeHandleError :: Result (Expr, Environment) -> Result (Expr, Environment)
--- maybeHandleError result = 
+handleError :: SchemeError -> InterpreterState Expr
+handleError (SchemeError msg) = do
+    liftIO $ putStrLn msg
+    return None
 
 process :: String -> InterpreterState ()
 process line = 
-  let res = parseForm line
-  in case res of
+    case parseForm line of
         Left err -> liftIO $ print err
         Right form -> do
-            expr <- evalForm form
+            expr <- catchE (evalForm form) handleError
             liftIO $ putStrLn $ printExpr expr
-  
 
 main :: IO ()
-main = void $ runExceptT $ runStateT (runInputT defaultSettings loop) initEnv
+main = void $ runStateT (runExceptT (runInputT defaultSettings loop)) initEnv
   where
   loop :: InputT InterpreterState ()
   loop = do
-    minput <- getInputLine "ready> "
+    minput <- getInputLine "scheme> "
     case minput of
       Nothing -> outputStrLn "Goodbye."
       Just input -> lift (process input) >> loop

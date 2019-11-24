@@ -3,7 +3,7 @@ module Ast where
 import Control.Monad.Trans.Except
 
 newtype SchemeError = SchemeError String deriving (Show)
-type Result = ExceptT SchemeError IO
+type Result = Either SchemeError
 
 type Name = String
 
