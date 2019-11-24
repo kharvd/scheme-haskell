@@ -40,17 +40,19 @@ import Text.Parsec (ParseError)
 --     -- controlIO :: (RunIO InterpreterState -> IO (InterpreterState a)) -> InterpreterState a
 --     controlIO f = 
 
+type InterpreterIO = InterpreterState IO
+
 instance (MonadException m) => MonadException (ExceptT e m) where
     controlIO f = ExceptT $ controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap ExceptT . run . runExceptT)
                     in fmap runExceptT $ f run'
 
-handleError :: SchemeError -> InterpreterState Expr
+handleError :: SchemeError -> InterpreterIO Expr
 handleError (SchemeError msg) = do
     liftIO $ putStrLn msg
     return None
 
-process :: String -> InterpreterState ()
+process :: String -> InterpreterIO ()
 process line = 
     case parseForm line of
         Left err -> liftIO $ print err
@@ -61,7 +63,7 @@ process line =
 main :: IO ()
 main = void $ runStateT (runExceptT (runInputT defaultSettings loop)) initEnv
   where
-  loop :: InputT InterpreterState ()
+  loop :: InputT InterpreterIO ()
   loop = do
     minput <- getInputLine "scheme> "
     case minput of
