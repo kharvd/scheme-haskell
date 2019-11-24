@@ -7,7 +7,7 @@ import qualified Text.Parsec.Expr as Ex
 import qualified Text.Parsec.Token as Tok
 
 import Lexer
-import Ast
+import Expression
 
 number :: Parser Expr
 number = IntConst <$> integer

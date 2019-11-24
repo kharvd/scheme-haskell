@@ -1,4 +1,4 @@
-module Ast where
+module Expression where
 
 import Control.Monad.Trans.Except
 

@@ -1,14 +1,14 @@
 import System.Environment (getArgs)
-import Control.Monad.State.Strict
-import Control.Monad.Trans
-import Control.Monad.Trans.Except
+import Control.Monad.State.Strict (runStateT)
+import Control.Monad.Trans (lift, liftIO)
+import Control.Monad (void)
+import Control.Monad.Trans.Except (runExceptT, ExceptT)
 import System.Console.Haskeline
 
 import Parser
--- import Compiler
 import Interpreter
 import Printer
-import Ast
+import Expression
 
 import Text.Parsec (ParseError)
 
@@ -40,7 +40,7 @@ import Text.Parsec (ParseError)
 --     -- controlIO :: (RunIO InterpreterState -> IO (InterpreterState a)) -> InterpreterState a
 --     controlIO f = 
 
-type InterpreterIO = InterpreterState IO
+type InterpreterIO = InterpreterT IO
 
 instance (MonadException m) => MonadException (ExceptT e m) where
     controlIO f = ExceptT $ controlIO $ \(RunIO run) -> let

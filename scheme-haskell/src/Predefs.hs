@@ -2,7 +2,7 @@ module Predefs (predefScope) where
 
 import Control.Monad.Trans.Except
 
-import Ast
+import Expression
 
 predefScope :: [(Name, Expr)]
 predefScope = map toPair predefs

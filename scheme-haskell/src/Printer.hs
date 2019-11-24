@@ -3,8 +3,7 @@ module Printer where
 import Data.List (intercalate)
 import Data.Maybe (maybeToList)
 
-import Ast
-import ExprUtils
+import Expression
 
 printForm :: Form -> String
 printForm (ExprForm expr) = printExpr expr
