@@ -1,8 +1,8 @@
 module Interpreter where
 
-import Control.Monad.State.Strict (StateT)
+import Control.Monad.State.Strict (StateT, evalStateT)
 import qualified Control.Monad.State.Strict as ST
-import Control.Monad.Trans.Except (ExceptT(..), catchE, throwE)
+import Control.Monad.Trans.Except (ExceptT(..), catchE, throwE, runExceptT)
 import Data.Maybe
 
 import qualified Environment as Env
@@ -13,24 +13,30 @@ import Utils
 
 type InterpreterT m = ExceptT SchemeError (StateT (Environment Expr) m)
 
+runInterpreterT :: (Monad m) => InterpreterT m a -> Environment Expr -> m (Result a)
+runInterpreterT computation = evalStateT (runExceptT computation)
+
 initEnv :: Environment Expr
 initEnv = Env.create predefScope Nothing
-
-runBody :: (Monad m) => Body -> InterpreterT m Expr
-runBody = fmap last . mapM evalForm
 
 evalForm :: (Monad m) => Form -> InterpreterT m Expr
 evalForm (ExprForm expr) = evalExpr expr
 evalForm (DefForm def) = evalDef def
 
-evalDef :: (Monad m) => Definition -> InterpreterT m Expr
-evalDef (VarDef name expr) = do
+defineVar :: (Monad m) => Name -> Expr -> InterpreterT m Expr
+defineVar name expr = do
   evaledExpr <- evalExpr expr
   ST.modify $ Env.insert name evaledExpr
   return $ Var name
-evalDef (FunDef name args body) = do
+
+defineFun :: (Monad m) => Name -> [Name] -> Body -> InterpreterT m Expr
+defineFun name args body = do
   ST.modify $ Env.insert name (Lambda args body)
   return $ Var name
+
+evalDef :: (Monad m) => Definition -> InterpreterT m Expr
+evalDef (VarDef name expr) = defineVar name expr
+evalDef (FunDef name args body) = defineFun name args body
 
 withEnv :: (Monad m) => Environment Expr -> InterpreterT m Expr -> InterpreterT m Expr
 withEnv env computation = do
@@ -53,10 +59,13 @@ checkNumArgs expected actual
   | expected < actual = throwE $ SchemeError "too many args"
 checkNumArgs expected actual = return ()
 
+runBody :: (Monad m) => Body -> InterpreterT m Expr
+runBody = fmap last . mapM evalForm
+
 applyLambda :: (Monad m) => [Name] -> Body -> [Expr] -> InterpreterT m Expr
 applyLambda argNames body args = do
-  outerEnv <- ST.get
   checkNumArgs (length argNames) (length args)
+  outerEnv <- ST.get
   let lambdaEnv = Env.create (zip argNames args) (Just outerEnv)
   withEnv lambdaEnv (runBody body)
 
@@ -98,26 +107,22 @@ evalIf cond ifTrue maybeIfFalse = do
     _ -> evalExpr ifTrue
 
 evalAnd :: (Monad m) => [Expr] -> InterpreterT m Expr
-evalAnd exprs =
-  let evalAnd [] = return $ BoolConst True
-      evalAnd [x] = evalExpr x
-      evalAnd (x:xs) = do
-        xEval <- evalExpr x
-        case xEval of
-          BoolConst False -> return xEval
-          _ -> evalAnd xs
-   in evalAnd exprs
+evalAnd [] = return $ BoolConst True
+evalAnd [x] = evalExpr x
+evalAnd (x:xs) = do
+  xEval <- evalExpr x
+  case xEval of
+    BoolConst False -> return xEval
+    _ -> evalAnd xs
 
 evalOr :: (Monad m) => [Expr] -> InterpreterT m Expr
-evalOr exprs =
-  let evalOr [] = return $ BoolConst False
-      evalOr [x] = evalExpr x
-      evalOr (x:xs) = do
-        xEval <- evalExpr x
-        case xEval of
-          BoolConst False -> evalOr xs
-          _ -> return xEval
-   in evalOr exprs
+evalOr [] = return $ BoolConst False
+evalOr [x] = evalExpr x
+evalOr (x:xs) = do
+  xEval <- evalExpr x
+  case xEval of
+    BoolConst False -> evalOr xs
+    _ -> return xEval
 
 evalExpr :: (Monad m) => Expr -> InterpreterT m Expr
 evalExpr None = return None
