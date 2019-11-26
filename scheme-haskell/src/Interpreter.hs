@@ -1,8 +1,13 @@
-module Interpreter where
+module Interpreter
+  ( InterpreterT
+  , runInterpreterT
+  , evalForm
+  , initEnv
+  ) where
 
 import Control.Monad.State.Strict (StateT, evalStateT)
 import qualified Control.Monad.State.Strict as ST
-import Control.Monad.Trans.Except (ExceptT(..), catchE, throwE, runExceptT)
+import Control.Monad.Trans.Except (ExceptT(..), catchE, runExceptT, throwE)
 import Data.Maybe
 
 import qualified Environment as Env
