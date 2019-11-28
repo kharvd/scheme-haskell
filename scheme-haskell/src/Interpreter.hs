@@ -7,7 +7,8 @@ module Interpreter
 
 import Control.Monad.State.Strict (StateT, evalStateT)
 import qualified Control.Monad.State.Strict as ST
-import Control.Monad.Trans.Except (ExceptT(..), catchE, runExceptT, throwE)
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Except (ExceptT(..), catchE, except, runExceptT, throwE)
 import Data.Maybe
 
 import qualified Environment as Env
@@ -129,6 +130,16 @@ evalOr (x:xs) = do
     BoolConst False -> evalOr xs
     _ -> return xEval
 
+evalPair :: (Monad m) => Expr -> Expr -> InterpreterT m Expr
+evalPair car cdr =
+  let extractArgs (Pair head tail) = do
+        tailArgs <- extractArgs tail
+        return $ head : tailArgs
+      extractArgs Nil = return []
+      extractArgs _ = Left $ SchemeError "cannot evaluate improper pair"
+   in do args <- except $ extractArgs cdr
+         evalApplication car args
+
 evalExpr :: (Monad m) => Expr -> InterpreterT m Expr
 evalExpr None = return None
 evalExpr const@(BoolConst _) = return const
@@ -136,11 +147,10 @@ evalExpr const@(IntConst _) = return const
 evalExpr (Var name) = evalVar name
 evalExpr (Set name expr) = evalSet name expr
 evalExpr lambda@(Lambda _ _) = return lambda
-evalExpr (Application fun args) = evalApplication fun args
 evalExpr (Quote expr) = return expr
 evalExpr (If cond ifTrue maybeIfFalse) = evalIf cond ifTrue maybeIfFalse
 evalExpr (And exprs) = evalAnd exprs
 evalExpr (Or exprs) = evalOr exprs
 evalExpr symbol@(Symbol _) = return symbol
-evalExpr (Pair _ _) = throwE $ SchemeError "Cannot evaluate raw pair"
+evalExpr (Pair car cdr) = evalPair car cdr
 evalExpr Nil = return Nil

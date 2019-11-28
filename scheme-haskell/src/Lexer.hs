@@ -6,6 +6,7 @@ import Text.Parsec.Language (emptyDef)
 import Text.Parsec.String (Parser)
 
 import qualified Text.Parsec.Token as Tok
+import Control.Monad (void)
 
 reservedNames = ["define", "quote", "lambda", "set!", "if", "#t", "#f"]
 
@@ -26,7 +27,7 @@ natural :: Parser Integer
 natural = Tok.natural lexer
 
 integer :: Parser Integer
-integer = do
+integer = Tok.lexeme lexer $ do
   plusMinus <- optionMaybe $ oneOf "+-"
   let mult =
         case plusMinus of
@@ -45,14 +46,17 @@ plusOrMinus = do
   Tok.whiteSpace lexer
   return [x]
 
+dot :: Parser ()
+dot = void $ Tok.lexeme lexer $ char '.'
+
 identifier :: Parser String
-identifier = plusOrMinus <|> (Tok.identifier lexer)
+identifier = plusOrMinus <|> Tok.identifier lexer
 
 reserved :: String -> Parser String
 reserved name = Tok.reserved lexer name >> return name
 
 identifierOrReserved :: Parser String
-identifierOrReserved = try identifier <|> (choice $ map reserved reservedNames)
+identifierOrReserved = try identifier <|> choice (map reserved reservedNames)
 
 quotation :: Parser ()
-quotation = fmap (\x -> ()) $ char '\''
+quotation = void $ char '\''

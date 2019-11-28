@@ -36,14 +36,13 @@ printExpr (Set name value) = printList [Var "set!", Var name, value]
 printExpr (And exprs) = printList exprs
 printExpr (Or exprs) = printList exprs
 printExpr (If cond ifTrue maybeIfFalse) = printList ([Var "if", cond, ifTrue] ++ maybeToList maybeIfFalse)
-printExpr (Application fun body) = printList $ fun : body
 printExpr (Symbol name) = name
 printExpr pair@(Pair car cdr) =
   let extractPair :: Expr -> ([Expr], Expr)
-      extractPair Nil = ([], Nil)
       extractPair (Pair car cdr) =
         let (init, last) = extractPair cdr
          in (car : init, last)
+      extractPair x = ([], x)
       (init, last) = extractPair pair
    in case last of
         Nil -> printList init

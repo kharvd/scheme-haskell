@@ -26,22 +26,30 @@ symbol :: Parser Expr
 symbol = Symbol <$> identifierOrReserved
 
 datum :: Parser Expr
-datum = try constant <|> try symbol <|> try list
+datum = try constant <|> try symbol <|> try quotedList
 
-_toCons :: [Expr] -> Expr
-_toCons = foldr Pair Nil
+collectPair :: [Expr] -> Expr -> Expr
+collectPair xs z = foldr Pair z xs
 
-list :: Parser Expr
-list = do
-  elements <- parens $ many datum
-  return $ _toCons elements
+pair :: Parser Expr -> Parser Expr
+pair subexpression =
+  parens $ do
+    elements <- many subexpression
+    maybeDot <- optionMaybe dot
+    collectPair elements <$>
+      case maybeDot of
+        Just () -> subexpression
+        Nothing -> return Nil
+
+quotedList :: Parser Expr
+quotedList = pair datum
 
 variable :: Parser Expr
 variable = Var <$> identifier
 
 quote :: Parser Expr
 quote =
-  let datumQuote = datum >>= (return . Quote)
+  let datumQuote = Quote <$> datum
       quoteParens = parens (reserved "quote" >> datumQuote)
       quoteShorthand = quotation >> datumQuote
    in try quoteParens <|> try quoteShorthand
@@ -89,15 +97,11 @@ orExpr =
     exprs <- many expression
     return $ Or exprs
 
-application :: Parser Expr
-application =
-  parens $ do
-    left <- expression
-    right <- many expression
-    return $ Application left right
+list :: Parser Expr
+list = pair expression
 
 expression :: Parser Expr
-expression = try constant <|> try variable <|> try quote <|> try lambda <|> try set <|> try ifExpr <|> application
+expression = try constant <|> try variable <|> try quote <|> try lambda <|> try set <|> try ifExpr <|> list
 
 functionDef :: Parser Definition
 functionDef =
@@ -133,4 +137,4 @@ parseProgram :: String -> Either ParseError Program
 parseProgram = parse program "<stdin>"
 
 parseForm :: String -> Either ParseError Form
-parseForm = parse form "<stdin>"
+parseForm = parse (Tok.whiteSpace lexer >> form) "<stdin>"
