@@ -40,12 +40,14 @@ data Expr
   | And [Expr]
   | Or [Expr]
   | If Expr Expr (Maybe Expr)
-  | Application Expr [Expr]
-    -- Quoted only
+  -- Quasiquote
+  | Quasiquote Expr
+  | Unquote Expr
+  -- Quoted only
   | Symbol Name
   | Pair Expr Expr
   | Nil
-    -- Nothing
+  -- Nothing
   | None
   | Predef NamedFunction
   deriving (Show)

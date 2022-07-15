@@ -26,7 +26,7 @@ symbol :: Parser Expr
 symbol = Symbol <$> identifierOrReserved
 
 datum :: Parser Expr
-datum = try constant <|> try symbol <|> try quotedList
+datum = try constant <|> try symbol <|> try quotedList <|> try quote
 
 collectPair :: [Expr] -> Expr -> Expr
 collectPair xs z = foldr Pair z xs
